@@ -67,6 +67,8 @@ class OneHeadAttention(nn.Module):
         self.fc = nn.Linear(d_model, d_model, bias=False)
 
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+        
+        self.sftmx = nn.Softmax(dim=-1)
 
         self.d_model = d_model
 
@@ -81,7 +83,7 @@ class OneHeadAttention(nn.Module):
         # Compute attention weights using queries and keys
         attn = torch.matmul(q / (self.d_model ** 0.5), k.transpose(-1, -2))
         # attn /= torch.sqrt(self.d_model)
-        attn = F.softmax(attn, dim=-1)
+        attn = self.sftmx(attn)
         q = torch.matmul(attn, v)
 
         q = self.fc(q)

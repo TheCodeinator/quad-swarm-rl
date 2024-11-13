@@ -4,6 +4,7 @@ import gymnasium as gym
 from gymnasium.core import ObsType
 from gymnasium.utils.step_api_compatibility import convert_to_terminated_truncated_step_api
 
+
 # Wrapper for compatibility with gym 0.26
 # Mostly copied from gym.EnvCompatability
 # Modified since swarm_rl does not have a seed, and is a vectorized env

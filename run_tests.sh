@@ -1,5 +1,3 @@
-#!/bin/bash
-
 python -m unittest
 STATUS_ALL_TESTS=$?
 

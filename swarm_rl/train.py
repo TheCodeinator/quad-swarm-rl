@@ -4,6 +4,9 @@ Main script for training a swarm of quadrotors with SampleFactory
 """
 
 import sys
+import os
+
+os.putenv("HSA_OVERRIDE_GFX_VERSION", "11.0.0")
 
 from sample_factory.cfg.arguments import parse_full_cfg, parse_sf_args
 from sample_factory.envs.env_utils import register_env

@@ -11,19 +11,11 @@ https://github.com/alex-petrenko/sample-factory
 
 **Website:** https://sites.google.com/view/swarm-rl
 
-
-
 <p align="middle">
 
 <img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Static_Same_Goal.gif?raw=true" width="45%">
 &emsp;
 <img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Swarm_vs_Swarm.gif?raw=true" width="45%">
-</p> 
-
-<p align="middle">
-<img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Obstacles_Static_Same_Goal.gif?raw=true" width="45%">
-&emsp;
-<img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Scale_32_Static_Same_Goal.gif?raw=true" width="45%">
 </p> 
 
 ## Installation
@@ -126,5 +118,3 @@ If you use this repository in your work or otherwise wish to cite it, please mak
   url       = {https://arxiv.org/abs/2109.07735}
 }
 ```
-
-Github issues and pull requests are welcome.

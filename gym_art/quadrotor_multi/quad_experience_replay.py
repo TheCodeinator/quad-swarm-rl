@@ -181,7 +181,7 @@ class ExperienceReplayWrapper(gym.Wrapper):
             obs = event.obs
             replayed_env = deepcopy(env)
             replayed_env.scenes = self.env.scenes
-            self.curr_obst_density = replayed_env.obst_density
+            self.curr_obst_density = 0.0 # we don't train with obstacles
 
             # we want to use these for tensorboard, so reset them to zero to get accurate stats
             replayed_env.collisions_per_episode = replayed_env.collisions_after_settle = 0

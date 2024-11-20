@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, SupportsFloat
 
 import gymnasium as gym
 from gymnasium.core import ObsType
@@ -31,7 +31,7 @@ class QuadEnvCompatibility(gym.Wrapper):
         """
         return self.env.reset(), {}
 
-    def step(self, action: Any) -> Tuple[Any, float, bool, bool, Dict]:
+    def step(self, action: Any) -> Tuple[Any, SupportsFloat, bool, bool, Dict[str, Any]]:
         """Steps through the environment.
 
         Args:
@@ -42,13 +42,9 @@ class QuadEnvCompatibility(gym.Wrapper):
         """
         # For QuadMultiEnv, truncated is actually integrated in the env,
         # since the termination is tick > ep_len
-        obs, reward, done, info = self.env.step(action)
+        obs, reward, terminated, truncated, info = self.env.step(action)
 
-        #convert_to_terminated_truncated_step_api treats done as an iterable if info is a dictionary, fails if it not iterable
-        if isinstance(info, dict) and isinstance(done, bool):
-            done = [done]
-
-        return convert_to_terminated_truncated_step_api((obs, reward, done, info), is_vector_env=True)
+        return obs, reward, terminated, truncated, info
 
     def render(self) -> Any:
         """Renders the environment.

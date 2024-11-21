@@ -9,6 +9,7 @@ import json
 import torch
 import torch.nn as nn
 import gymnasium as gym
+import torchlens as tl
 
 from typing import List
 from pathlib import Path
@@ -17,8 +18,6 @@ from sample_factory.model.actor_critic import ActorCritic, create_actor_critic
 from sample_factory.algo.utils.env_info import EnvInfo, extract_env_info
 from sample_factory.algo.learning.learner import Learner
 from sample_factory.utils.typing import Config
-from sample_factory.algo.sampling.batched_sampling import preprocess_actions
-from sample_factory.algo.utils.action_distributions import argmax_actions
 from sample_factory.algo.utils.rl_utils import prepare_and_normalize_obs
 from sample_factory.cfg.arguments import load_from_checkpoint
 from swarm_rl.env_wrappers.quad_utils import make_quadrotor_env_multi
@@ -26,6 +25,9 @@ from swarm_rl.train import register_swarm_components
 
 
 class Wrapper(nn.Module):
+    """
+    Necessary to pass forward expected dummy rnn states for non rnn actor critics
+    """
     actor_critic: ActorCritic
     cfg: Config
     env_info: EnvInfo
@@ -37,28 +39,11 @@ class Wrapper(nn.Module):
         self.actor_critic = actor_critic
 
     def forward(self, **obs):
-
         rnn_states = torch.zeros([1, self.cfg.rnn_size], dtype=torch.float32)
-        action_mask = obs.pop("action_mask", None)
         normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
         policy_outputs = self.actor_critic(normalized_obs, rnn_states)
         actions = policy_outputs["actions"]
-        rnn_states = policy_outputs["new_rnn_states"]
-        #if self.cfg.eval_deterministic:
-        #    action_distribution = self.actor_critic.action_distribution()
-        #    actions = argmax_actions(action_distribution)
-        # if actions.ndim == 1:
-        #    actions = unsqueeze_tensor(actions, dim=-1)
-        actions = preprocess_actions(self.env_info, actions)
-
-        return torch.from_numpy(actions).unsqueeze(1)
-
-
-def generate_args(space: gym.spaces.Space, batch_size: int = 1):
-    args = [unsqueeze_args(sample_space(space)) for _ in range(batch_size)]
-    args = [a for a in args if isinstance(a, dict)]
-    args = {k: torch.cat(tuple(a[k] for a in args), dim=0) for k in args[0].keys()} if len(args) > 0 else {}
-    return args
+        return actions
 
 
 def sample_space(space: gym.spaces.Space):
@@ -122,7 +107,6 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 
 def main():
-
     name = "train_multi_drone_real_256_256_full_encoder_128_mean_embed_smaller_env_lower_lr"
 
     model_dir = Path(f"../train_dir/{name}/")
@@ -136,26 +120,35 @@ def main():
 
     register_swarm_components()
     env = make_quadrotor_env_multi(cfg)
+
+    torch.jit._state.disable()
     model = create_actor_critic(cfg, env.observation_space, env.action_space)
+    torch.jit._state.enable()
+
     model.eval()
     load_state_dict(cfg, model, torch.device("cpu"))
 
     wrapped_model = Wrapper(cfg, extract_env_info(env, cfg), model)
 
-    m_arguments = generate_args(env.observation_space)
-
-    input_names = list(m_arguments.keys())
+    input_names = ['obs']
     output_names = ["output_actions"]
 
-    dynamic_axes = {key: {0: "batch_size"} for key in input_names + output_names}
+    # dynamic_axes = {key: {0: "batch_size"} for key in input_names + output_names}
 
     patch_forward(wrapped_model, input_names)
 
-    torch.onnx.export(wrapped_model, (m_arguments,), f"{name}.onnx",
+    m_arguments = {'obs': torch.rand((1, 48), dtype=torch.float32)}
+
+    """
+    tl.log_forward_pass(wrapped_model, (m_arguments,),
+                        layers_to_save='all',
+                        vis_opt='unrolled')
+    """
+
+    torch.onnx.export(wrapped_model, (m_arguments,), f"{model_dir}/{name}.onnx",
                       export_params=True,
                       input_names=input_names,
-                      output_names=output_names,
-                      dynamic_axes=dynamic_axes)
+                      output_names=output_names)
 
     return 0
 

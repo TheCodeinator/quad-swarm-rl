@@ -16,6 +16,7 @@ from pathlib import Path
 from attrdict import AttrDict
 from sample_factory.model.actor_critic import ActorCritic, create_actor_critic
 from sample_factory.algo.utils.env_info import EnvInfo, extract_env_info
+from sample_factory.algo.utils.action_distributions import argmax_actions
 from sample_factory.algo.learning.learner import Learner
 from sample_factory.utils.typing import Config
 from sample_factory.algo.utils.rl_utils import prepare_and_normalize_obs
@@ -26,7 +27,7 @@ from swarm_rl.train import register_swarm_components
 
 class Wrapper(nn.Module):
     """
-    Necessary to pass forward expected dummy rnn states for non rnn actor critics
+    Pass forward expected dummy rnn states for non rnn actor critics 
     """
     actor_critic: ActorCritic
     cfg: Config
@@ -43,6 +44,8 @@ class Wrapper(nn.Module):
         normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
         policy_outputs = self.actor_critic(normalized_obs, rnn_states)
         actions = policy_outputs["actions"]
+        action_distribution = self.actor_critic.action_distribution()
+        actions = argmax_actions(action_distribution)
         return actions
 
 

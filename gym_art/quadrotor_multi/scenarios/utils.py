@@ -11,7 +11,7 @@ QUADS_MODE_LIST = [  # static formations
                    # 'ep_lissajous3D',
                    # 'ep_rand_bezier',
                      # dynamic formations
-                   'dynamic_same_goal',
+                   # 'dynamic_same_goal',
                    'dynamic_diff_goal',
                    'dynamic_formations',
                    'swap_goals',

@@ -21,7 +21,7 @@ from gym_art.quadrotor_multi.scenarios.mix import create_scenario
 
 
 class QuadrotorEnvMulti(gym.Env):
-    def __init__(self, num_agents, ep_time, rew_coeff, obs_repr,
+    def __init__(self, num_agents, ep_time, rew_coeff, obs_repr, sim_freq,
                  # Neighbor
                  neighbor_visible_num, neighbor_obs_type, collision_hitbox_radius, collision_falloff_radius,
 
@@ -69,7 +69,7 @@ class QuadrotorEnvMulti(gym.Env):
                 num_agents=num_agents,
                 neighbor_obs_type=neighbor_obs_type, num_use_neighbor_obs=self.num_use_neighbor_obs,
                 # Obstacle
-                use_obstacles=use_obstacles,
+                use_obstacles=use_obstacles, sim_freq=sim_freq
             )
             self.envs.append(e)
 
@@ -329,7 +329,7 @@ class QuadrotorEnvMulti(gym.Env):
         for i in range(len(self.quads_view_mode)):
             self.scenes.append(Quadrotor3DSceneMulti(
                 models=models,
-                w=600, h=480, resizable=True, viewpoint=self.quads_view_mode[i],
+                w=1920, h=780, resizable=True, viewpoint=self.quads_view_mode[i],
                 room_dims=self.room_dims, num_agents=self.num_agents,
                 render_speed=self.render_speed, formation_size=self.quads_formation_size, obstacles=self.obstacles,
                 vis_vel_arrows=False, vis_acc_arrows=True, viz_traces=25, viz_trace_nth_step=1,

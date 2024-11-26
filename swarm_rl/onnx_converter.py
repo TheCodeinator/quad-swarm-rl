@@ -27,7 +27,7 @@ from swarm_rl.train import register_swarm_components
 
 class Wrapper(nn.Module):
     """
-    Pass forward expected dummy rnn states for non rnn actor critics 
+    Pass forward expected dummy rnn states for non rnn actor critics
     """
     actor_critic: ActorCritic
     cfg: Config
@@ -40,10 +40,8 @@ class Wrapper(nn.Module):
         self.actor_critic = actor_critic
 
     def forward(self, **obs):
-        rnn_states = torch.zeros([1, self.cfg.rnn_size], dtype=torch.float32)
         normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
-        policy_outputs = self.actor_critic(normalized_obs, rnn_states)
-        actions = policy_outputs["actions"]
+        _ = self.actor_critic(obs, sample_actions=False)
         action_distribution = self.actor_critic.action_distribution()
         actions = argmax_actions(action_distribution)
         return actions
@@ -110,7 +108,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 
 def main():
-    name = "train_multi_drone_real_256_256_full_encoder_128_mean_embed_smaller_env_lower_lr"
+    name = "train_multi_drone_fully_custom"
 
     model_dir = Path(f"../train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'
@@ -126,21 +124,21 @@ def main():
 
     torch.jit._state.disable()
     model = create_actor_critic(cfg, env.observation_space, env.action_space)
-    torch.jit._state.enable()
-
     model.eval()
     load_state_dict(cfg, model, torch.device("cpu"))
+    torch.jit._state.enable()
 
     wrapped_model = Wrapper(cfg, extract_env_info(env, cfg), model)
 
     input_names = ['obs']
     output_names = ["output_actions"]
 
+    # if input width is not fixed
     # dynamic_axes = {key: {0: "batch_size"} for key in input_names + output_names}
 
     patch_forward(wrapped_model, input_names)
 
-    m_arguments = {'obs': torch.rand((1, 48), dtype=torch.float32)}
+    m_arguments = {'obs': torch.rand(2, 48, dtype=torch.float32)}
 
     """
     tl.log_forward_pass(wrapped_model, (m_arguments,),
@@ -148,10 +146,12 @@ def main():
                         vis_opt='unrolled')
     """
 
-    torch.onnx.export(wrapped_model, (m_arguments,), f"{model_dir}/{name}.onnx",
-                      export_params=True,
+    torch.onnx.export(wrapped_model, (m_arguments,), f"{name}.onnx",
                       input_names=input_names,
-                      output_names=output_names)
+                      output_names=output_names,
+                      # dynamic_axes=dynamic_axes,
+                      keep_initializers_as_inputs=False
+                      )
 
     return 0
 

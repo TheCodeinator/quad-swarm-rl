@@ -1,8 +1,8 @@
 python -m swarm_rl.train \
---env=quadrotor_multi --train_for_env_steps=100000000 --algo=APPO --use_rnn=False \
+--env=quadrotor_multi --train_for_env_steps=50000000 --algo=APPO --use_rnn=False \
 --num_workers=6 --num_envs_per_worker=10 --device=cpu --learning_rate=0.0002 --ppo_clip_value=5.0 --recurrence=1 \
---nonlinearity=relu --actor_critic_share_weights=False --policy_initialization=xavier_uniform \
---adaptive_stddev=False --with_vtrace=False --max_policy_lag=100000000 --rnn_size=256 \
+--nonlinearity=relu --actor_critic_share_weights=True --policy_initialization=xavier_uniform \
+--adaptive_stddev=False --with_vtrace=False --max_policy_lag=100000000 --rnn_size=256 --kl_loss_coeff=0.1 \
 --gae_lambda=1.00 --max_grad_norm=5.0 --exploration_loss_coeff=0.003 --rollout=128 --batch_size=1024 \
 --with_pbt=False --normalize_input=False --normalize_returns=False --reward_clip=10 \
 --quads_use_numba=True --save_milestones_sec=3600 --anneal_collision_steps=300000000 \
@@ -17,6 +17,6 @@ python -m swarm_rl.train \
 --quads_use_obstacles=False --quads_obst_density=0.0 \
 --quads_use_downwash=True \
 --quads_view_mode=global --quads_render=False \
---experiment=train_multi_drone_real_256_256_full_encoder_128_mean_embed_smaller_env_lower_lr \
+--experiment=train_multi_drone_fully_custom \
 --with_wandb=True --wandb_user=codeinator-personal \
 --wandb_project=neuralfly \

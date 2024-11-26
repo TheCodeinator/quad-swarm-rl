@@ -1,14 +1,22 @@
+from typing import List
+
 import torch
+from sample_factory.model.core import ModelCore
+
 from torch import nn
 
+from sample_factory.algo.utils.tensor_dict import TensorDict
 from sample_factory.algo.utils.context import global_model_factory
 from sample_factory.algo.utils.torch_utils import calc_num_elements
 from sample_factory.model.encoder import Encoder
-from sample_factory.model.model_utils import fc_layer, nonlinearity
+from sample_factory.model.decoder import Decoder
+from sample_factory.model.actor_critic import ActorCriticSharedWeights
+from sample_factory.model.action_parameterization import ActionsParameterization
+from sample_factory.model.model_utils import fc_layer, nonlinearity, create_mlp
 
 from gym_art.quadrotor_multi.quad_utils import QUADS_OBS_REPR, QUADS_NEIGHBOR_OBS_TYPE, QUADS_OBSTACLE_OBS_TYPE
 
-from swarm_rl.models.attention_layer import MultiHeadAttention, OneHeadAttention
+from swarm_rl.models.attention_layer import MultiHeadAttention
 
 
 class QuadNeighborhoodEncoder(nn.Module):
@@ -32,13 +40,19 @@ class QuadNeighborhoodEncoderDeepsets(QuadNeighborhoodEncoder):
             nonlinearity(cfg)
         )
 
+        self.mean_mlp = nn.Sequential(
+            fc_layer(neighbor_hidden_size, neighbor_hidden_size),
+            nonlinearity(cfg)
+        )
+
     def forward(self, self_obs, obs, all_neighbor_obs_size, batch_size):
         obs_neighbors = obs[:, self.self_obs_dim:self.self_obs_dim + all_neighbor_obs_size]
         obs_neighbors = obs_neighbors.reshape(-1, self.neighbor_obs_dim)
         neighbor_embeds = self.embedding_mlp(obs_neighbors)
         neighbor_embeds = neighbor_embeds.reshape(batch_size, -1, self.neighbor_hidden_size)
         mean_embed = torch.mean(neighbor_embeds, dim=1)
-        return mean_embed
+        activated_embed = self.mean_mlp(mean_embed)
+        return activated_embed
 
 
 class QuadNeighborhoodEncoderAttention(QuadNeighborhoodEncoder):
@@ -172,7 +186,7 @@ class QuadMultiHeadAttentionEncoder(Encoder):
         # MLP Layer
         self.encoder_output_size = 2 * cfg.rnn_size
         self.feed_forward = nn.Sequential(fc_layer(3 * cfg.rnn_size, self.encoder_output_size),
-                                          nn.Tanh())
+                                          nonlinearity(cfg))
 
     def forward(self, obs_dict):
         obs = obs_dict['obs']
@@ -198,53 +212,6 @@ class QuadMultiHeadAttentionEncoder(Encoder):
 
     def get_out_size(self):
         return self.encoder_output_size
-
-
-class QuadSingleHeadAttentionEncoder_Sim2Real(QuadMultiHeadAttentionEncoder):
-    def __init__(self, cfg, obs_space):
-        super().__init__(cfg, obs_space)
-
-        # Internal params
-        if cfg.quads_obs_repr in QUADS_OBS_REPR:
-            self.self_obs_dim = QUADS_OBS_REPR[cfg.quads_obs_repr]
-        else:
-            raise NotImplementedError(f'Layer {cfg.quads_obs_repr} not supported!')
-
-        self.neighbor_hidden_size = cfg.quads_neighbor_hidden_size
-        self.use_obstacles = cfg.quads_use_obstacles
-
-        if cfg.quads_neighbor_visible_num == -1:
-            self.num_use_neighbor_obs = cfg.quads_num_agents - 1
-        else:
-            self.num_use_neighbor_obs = cfg.quads_neighbor_visible_num
-
-        self.neighbor_obs_dim = QUADS_NEIGHBOR_OBS_TYPE[cfg.quads_neighbor_obs_type]
-
-        self.all_neighbor_obs_dim = self.neighbor_obs_dim * self.num_use_neighbor_obs
-
-        # Embedding Layer
-        fc_encoder_layer = cfg.rnn_size
-        self.self_embed_layer = nn.Sequential(
-            fc_layer(self.self_obs_dim, fc_encoder_layer),
-            nonlinearity(cfg),
-        )
-        self.neighbor_embed_layer = nn.Sequential(
-            fc_layer(self.all_neighbor_obs_dim, fc_encoder_layer),
-            nonlinearity(cfg),
-        )
-        self.obstacle_obs_dim = QUADS_OBSTACLE_OBS_TYPE[cfg.quads_obstacle_obs_type]
-        self.obstacle_embed_layer = nn.Sequential(
-            fc_layer(self.obstacle_obs_dim, fc_encoder_layer),
-            nonlinearity(cfg),
-        )
-
-        # Attention Layer
-        self.attention_layer = OneHeadAttention(cfg.rnn_size)
-
-        # MLP Layer
-        self.encoder_output_size = cfg.rnn_size
-        self.feed_forward = nn.Sequential(fc_layer(3 * cfg.rnn_size, self.encoder_output_size),
-                                          nn.Tanh())
 
 
 class QuadMultiEncoder(Encoder):
@@ -302,7 +269,7 @@ class QuadMultiEncoder(Encoder):
             fc_layer(self.self_obs_dim, fc_encoder_layer),
             nonlinearity(cfg),
             fc_layer(fc_encoder_layer, fc_encoder_layer),
-            nonlinearity(cfg)
+            nn.ReLU()  # not in place
         )
         self_encoder_out_size = calc_num_elements(self.self_encoder, (self.self_obs_dim,))
 
@@ -325,7 +292,7 @@ class QuadMultiEncoder(Encoder):
         # here
         self.feed_forward = nn.Sequential(
             fc_layer(total_encoder_out_size, 2 * cfg.rnn_size),
-            nn.Tanh(),
+            nonlinearity(cfg),
         )
 
         self.encoder_out_size = 2 * cfg.rnn_size
@@ -333,8 +300,7 @@ class QuadMultiEncoder(Encoder):
     def forward(self, obs_dict):
         obs = obs_dict['obs']
         obs_self = obs[:, :self.self_obs_dim]
-        self_embed = self.self_encoder(obs_self)
-        embeddings = self_embed
+        embeddings = self.self_encoder(obs_self)
         batch_size = obs_self.shape[0]
         # Relative xyz and vxyz for the Entire Minibatch (batch dimension is batch_size * num_neighbors)
         if self.neighbor_encoder:
@@ -353,16 +319,130 @@ class QuadMultiEncoder(Encoder):
         return self.encoder_out_size
 
 
+class QuadMultiCore(ModelCore):
+
+    def __init__(self, cfg, input_size):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.core_output_size = input_size
+
+    @staticmethod
+    def forward(head_outputs, rnn_states=None):
+        return head_outputs, None
+
+
+class QuadMultiDecoder(Decoder):
+
+    def __init__(self, cfg, decoder_input_size):
+        super().__init__(cfg)
+        self.core_input_size = decoder_input_size
+        decoder_layers: List[int] = cfg.decoder_mlp_layers
+        activation = nonlinearity(cfg)
+        self.mlp = create_mlp(decoder_layers, decoder_input_size, activation)
+        if len(decoder_layers) > 0:
+            self.mlp = torch.jit.script(self.mlp)
+
+        self.decoder_out_size = calc_num_elements(self.mlp, (decoder_input_size,))
+
+    def forward(self, core_output):
+        return self.mlp(core_output)
+
+    def get_out_size(self) -> int:
+        return self.decoder_out_size
+
+
+class QuadMultiActorCritic(ActorCriticSharedWeights):
+
+    def __init__(self,
+                 model_factory,
+                 obs_space,
+                 action_space,
+                 cfg):
+        super().__init__(model_factory, obs_space, action_space, cfg)
+        # in case of shared weights we're using only a single encoder and a single core
+        self.encoder = model_factory.make_model_encoder_func(cfg, obs_space)
+        self.encoders = [self.encoder]  # a single shared encoder
+
+        self.core = model_factory.make_model_core_func(cfg, self.encoder.get_out_size())
+
+        self.decoder = model_factory.make_model_decoder_func(cfg, self.core.get_out_size())
+        decoder_out_size: int = self.decoder.get_out_size()
+
+        self.critic_linear = nn.Linear(decoder_out_size, 1)
+        self.action_parameterization = self.get_action_parameterization(decoder_out_size)
+
+        self.apply(self.initialize_weights)
+
+    def forward_core(self, head_output, rnn=None):
+        x = self.core(head_output)
+        return x
+
+    def forward_tail(self, core_output, values_only: bool, sample_actions: bool) -> TensorDict:
+        decoder_output = self.decoder(core_output)
+        values = self.critic_linear(decoder_output).squeeze()
+
+        result = TensorDict(values=values)
+        if values_only:
+            return result
+
+        action_distribution_params, self.last_action_distribution = self.action_parameterization(decoder_output)
+
+        # `action_logits` is not the best name here, better would be "action distribution parameters"
+        result["action_logits"] = action_distribution_params
+
+        self._maybe_sample_actions(sample_actions, result)
+        return result
+
+    def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
+        x = self.forward_head(normalized_obs_dict)
+        x, _ = self.forward_core(x)
+        result = self.forward_tail(x, values_only, sample_actions)
+        result["new_rnn_states"] = rnn_states
+        return result
+
+
+class QuadMultiActorCriticRNN(ActorCriticSharedWeights):
+    def __init__(self,
+                 model_factory,
+                 obs_space,
+                 action_space,
+                 cfg):
+        super().__init__(model_factory, obs_space, action_space, cfg)
+
+    def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
+        x = self.forward_head(normalized_obs_dict)
+        x, new_rnn_states = self.forward_core(x, rnn_states)
+        result = self.forward_tail(x, values_only, sample_actions)
+        result["new_rnn_states"] = new_rnn_states
+        return result
+
+
 def make_quadmulti_encoder(cfg, obs_space) -> Encoder:
     if cfg.quads_encoder_type == "attention":
-        if cfg.quads_sim2real:
-            model = QuadSingleHeadAttentionEncoder_Sim2Real(cfg, obs_space)
-        else:
-            model = QuadMultiHeadAttentionEncoder(cfg, obs_space)
+        model = QuadMultiHeadAttentionEncoder(cfg, obs_space)
     else:
         model = QuadMultiEncoder(cfg, obs_space)
     return model
 
 
+def make_quadmulti_core(cfg, core_input_size: int) -> ModelCore:
+    return QuadMultiCore(cfg, core_input_size)
+
+
+def make_quadmulti_decoder(cfg, core_size) -> Decoder:
+    return QuadMultiDecoder(cfg, core_size)
+
+
+def make_quadmulti_ac(cfg, obs_space, action_space) -> ActorCriticSharedWeights:
+    model_factory = global_model_factory()
+    if cfg.use_rnn:
+        return QuadMultiActorCriticRNN(model_factory, obs_space, action_space, cfg)
+    else:
+        model_factory.register_model_core_factory(make_quadmulti_core)
+        return QuadMultiActorCritic(model_factory, obs_space, action_space, cfg)
+
+
 def register_models():
+    global_model_factory().register_actor_critic_factory(make_quadmulti_ac)
     global_model_factory().register_encoder_factory(make_quadmulti_encoder)
+    global_model_factory().register_decoder_factory(make_quadmulti_decoder)

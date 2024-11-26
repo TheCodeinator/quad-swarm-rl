@@ -6,9 +6,12 @@ Export trained model in ONNX (Open Neural Network eXchange) format
 
 import types
 import json
+
+import onnx
 import torch
 import torch.nn as nn
 import gymnasium as gym
+import onnxsim
 import torchlens as tl
 
 from typing import List
@@ -23,6 +26,26 @@ from sample_factory.algo.utils.rl_utils import prepare_and_normalize_obs
 from sample_factory.cfg.arguments import load_from_checkpoint
 from swarm_rl.env_wrappers.quad_utils import make_quadrotor_env_multi
 from swarm_rl.train import register_swarm_components
+
+
+class RnnWrapper(nn.Module):
+    actor_critic: ActorCritic
+    cfg: Config
+    env_info: EnvInfo
+
+    def __init__(self, cfg: Config, env_info: EnvInfo, actor_critic: ActorCritic):
+        super().__init__()
+        self.cfg = cfg
+        self.env_info = env_info
+        self.actor_critic = actor_critic
+
+    def forward(self, **obs):
+        rnn = obs.pop("rnn_states")
+        normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
+        rnn = self.actor_critic(normalized_obs, rnn, sample_actions=False)["new_rnn_states"]
+        action_distribution = self.actor_critic.action_distribution()
+        actions = argmax_actions(action_distribution)
+        return actions, rnn
 
 
 class Wrapper(nn.Module):
@@ -41,7 +64,7 @@ class Wrapper(nn.Module):
 
     def forward(self, **obs):
         normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
-        _ = self.actor_critic(obs, sample_actions=False)
+        _ = self.actor_critic(normalized_obs, sample_actions=False)
         action_distribution = self.actor_critic.action_distribution()
         actions = argmax_actions(action_distribution)
         return actions
@@ -108,7 +131,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 
 def main():
-    name = "train_multi_drone_fully_custom"
+    name = "neuralfly_rnn"
 
     model_dir = Path(f"../train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'
@@ -128,17 +151,25 @@ def main():
     load_state_dict(cfg, model, torch.device("cpu"))
     torch.jit._state.enable()
 
-    wrapped_model = Wrapper(cfg, extract_env_info(env, cfg), model)
+    if cfg.use_rnn:
+        model = RnnWrapper(cfg, extract_env_info(env, cfg), model)
+    else:
+        model = Wrapper(cfg, extract_env_info(env, cfg), model)
 
     input_names = ['obs']
-    output_names = ["output_actions"]
+    output_names = ["thrust_out"]
+
+    m_arguments = {'obs': torch.rand(1, 48, dtype=torch.float32)}
+
+    if cfg.use_rnn:
+        input_names.append("rnn_states")
+        output_names.append("rnn_out")
+        m_arguments["rnn_states"] = torch.zeros([1, cfg.rnn_size], dtype=torch.float32)
 
     # if input width is not fixed
     # dynamic_axes = {key: {0: "batch_size"} for key in input_names + output_names}
 
-    patch_forward(wrapped_model, input_names)
-
-    m_arguments = {'obs': torch.rand(2, 48, dtype=torch.float32)}
+    patch_forward(model, input_names)
 
     """
     tl.log_forward_pass(wrapped_model, (m_arguments,),
@@ -146,12 +177,23 @@ def main():
                         vis_opt='unrolled')
     """
 
-    torch.onnx.export(wrapped_model, (m_arguments,), f"{name}.onnx",
+    fn = f"../artifacts/{name}.onnx"
+
+    torch.onnx.export(model, (m_arguments,), fn,
                       input_names=input_names,
                       output_names=output_names,
                       # dynamic_axes=dynamic_axes,
                       keep_initializers_as_inputs=False
                       )
+
+    m_in = onnx.load(fn)
+
+    m_out, check = onnxsim.simplify(m_in, 10)
+
+    if check:
+        onnx.save(m_out, fn)
+    else:
+        raise AssertionError("Model optimization failed")
 
     return 0
 

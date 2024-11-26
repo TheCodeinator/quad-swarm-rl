@@ -4,9 +4,17 @@ import numpy as np
 from numpy import cos, sin
 from numba import njit
 
-QUADS_MODE_LIST = ['static_same_goal', 'static_diff_goal',  # static formations
-                   'ep_lissajous3D', 'ep_rand_bezier',  # evader pursuit
-                   'dynamic_same_goal', 'dynamic_diff_goal', 'dynamic_formations', 'swap_goals',  # dynamic formations
+QUADS_MODE_LIST = [  # static formations
+                   'static_same_goal',
+                   'static_diff_goal',
+                     # evader pursuit
+                   # 'ep_lissajous3D',
+                   # 'ep_rand_bezier',
+                     # dynamic formations
+                   'dynamic_same_goal',
+                   'dynamic_diff_goal',
+                   'dynamic_formations',
+                   'swap_goals',
                    'swarm_vs_swarm']  # only support >=2 drones
 
 QUADS_MODE_LIST_SINGLE = ['static_same_goal', 'static_diff_goal',  # static formations

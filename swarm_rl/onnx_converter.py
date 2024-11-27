@@ -10,6 +10,7 @@ import onnx
 import torch
 import torch.nn as nn
 import onnxsim
+import netron
 
 from typing import List
 from pathlib import Path
@@ -102,7 +103,10 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 
 def main():
-    name = "neuralfly_no_rnn"
+
+    # I could add a command parser here
+    name = "neuralfly_full_rnn_sqz2"
+    visualize = True
 
     model_dir = Path(f"../train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'
@@ -158,13 +162,17 @@ def main():
 
     m_out, check = onnxsim.simplify(m_in,
                                     5,
-                                    skip_shape_inference=True,
+                                    skip_shape_inference=False,
                                     overwrite_input_shapes={"obs": [1, 48]})
 
     if check:
         onnx.save(m_out, fn)
     else:
         raise AssertionError("Model optimization failed")
+
+    if visualize:
+        netron.start(fn, 10002, False)
+        netron.wait()
 
     return 0
 

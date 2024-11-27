@@ -1,6 +1,7 @@
 from typing import List
 
 import torch
+import numpy as np
 from sample_factory.model.core import ModelCore
 
 from torch import nn
@@ -8,6 +9,7 @@ from torch import nn
 from sample_factory.algo.utils.tensor_dict import TensorDict
 from sample_factory.algo.utils.context import global_model_factory
 from sample_factory.algo.utils.torch_utils import calc_num_elements
+from sample_factory.algo.utils.action_distributions import ContinuousActionDistribution
 from sample_factory.model.encoder import Encoder
 from sample_factory.model.decoder import Decoder
 from sample_factory.model.actor_critic import ActorCriticSharedWeights
@@ -40,19 +42,13 @@ class QuadNeighborhoodEncoderDeepsets(QuadNeighborhoodEncoder):
             nonlinearity(cfg)
         )
 
-        self.mean_mlp = nn.Sequential(
-            fc_layer(neighbor_hidden_size, neighbor_hidden_size),
-            nonlinearity(cfg)
-        )
-
     def forward(self, self_obs, obs, all_neighbor_obs_size, batch_size):
         obs_neighbors = obs[:, self.self_obs_dim:self.self_obs_dim + all_neighbor_obs_size]
         obs_neighbors = obs_neighbors.reshape(-1, self.neighbor_obs_dim)
         neighbor_embeds = self.embedding_mlp(obs_neighbors)
         neighbor_embeds = neighbor_embeds.reshape(batch_size, -1, self.neighbor_hidden_size)
         mean_embed = torch.mean(neighbor_embeds, dim=1)
-        activated_embed = self.mean_mlp(mean_embed)
-        return activated_embed
+        return mean_embed
 
 
 class QuadNeighborhoodEncoderAttention(QuadNeighborhoodEncoder):
@@ -269,7 +265,7 @@ class QuadMultiEncoder(Encoder):
             fc_layer(self.self_obs_dim, fc_encoder_layer),
             nonlinearity(cfg),
             fc_layer(fc_encoder_layer, fc_encoder_layer),
-            nn.ReLU()  # not in place
+            nonlinearity(cfg)
         )
         self_encoder_out_size = calc_num_elements(self.self_encoder, (self.self_obs_dim,))
 
@@ -300,17 +296,21 @@ class QuadMultiEncoder(Encoder):
     def forward(self, obs_dict):
         obs = obs_dict['obs']
         obs_self = obs[:, :self.self_obs_dim]
-        embeddings = self.self_encoder(obs_self)
         batch_size = obs_self.shape[0]
-        # Relative xyz and vxyz for the Entire Minibatch (batch dimension is batch_size * num_neighbors)
-        if self.neighbor_encoder:
-            neighborhood_embedding = self.neighbor_encoder(obs_self, obs, self.all_neighbor_obs_size, batch_size)
-            embeddings = torch.cat((embeddings, neighborhood_embedding), dim=1)
+        squeeze_dim = 0 if batch_size == 1 else 1
+        self_embeddings = self.self_encoder(obs_self)
+        cat_input_self = self_embeddings.squeeze(0).clone()
+        neighborhood_embedding = self.neighbor_encoder(obs_self, obs, self.all_neighbor_obs_size, batch_size)
+        cat_input_nb = neighborhood_embedding.squeeze(0).clone()
+        embeddings = torch.cat((cat_input_self, cat_input_nb), dim=squeeze_dim)
 
         if self.use_obstacles:
             obs_obstacles = obs[:, self.self_obs_dim + self.all_neighbor_obs_size:]
-            obstacle_embeds = self.obstacle_encoder(obs_obstacles)
-            embeddings = torch.cat((embeddings, obstacle_embeds), dim=1)
+            obstacle_embeds = self.obstacle_encoder(obs_obstacles).squeeze(0).clone()
+            embeddings = torch.cat((embeddings, obstacle_embeds), dim=squeeze_dim)
+
+        if squeeze_dim == 0:
+            embeddings = embeddings.unsqueeze(0)
 
         out = self.feed_forward(embeddings)
         return out
@@ -351,6 +351,21 @@ class QuadMultiDecoder(Decoder):
         return self.decoder_out_size
 
 
+class QuadActionParametrization(ActionsParameterization):
+
+    def __init__(self, cfg, core_out_size, action_space):
+        super().__init__(cfg, action_space)
+
+        num_action_outputs = np.prod(action_space.shape)*2
+        self.distribution_linear = nn.Linear(core_out_size, num_action_outputs)
+
+    def forward(self, actor_core_output):
+        """Just forward the FC layer and generate the distribution object."""
+        action_distribution_params = self.distribution_linear(actor_core_output)
+        action_distribution = ContinuousActionDistribution(params=action_distribution_params)
+        return action_distribution_params, action_distribution
+
+
 class QuadMultiActorCritic(ActorCriticSharedWeights):
 
     def __init__(self,
@@ -369,29 +384,13 @@ class QuadMultiActorCritic(ActorCriticSharedWeights):
         decoder_out_size: int = self.decoder.get_out_size()
 
         self.critic_linear = nn.Linear(decoder_out_size, 1)
-        self.action_parameterization = self.get_action_parameterization(decoder_out_size)
+        self.action_parameterization = QuadActionParametrization(cfg, decoder_out_size, action_space)
 
         self.apply(self.initialize_weights)
 
     def forward_core(self, head_output, rnn=None):
         x = self.core(head_output)
         return x
-
-    def forward_tail(self, core_output, values_only: bool, sample_actions: bool) -> TensorDict:
-        decoder_output = self.decoder(core_output)
-        values = self.critic_linear(decoder_output).squeeze()
-
-        result = TensorDict(values=values)
-        if values_only:
-            return result
-
-        action_distribution_params, self.last_action_distribution = self.action_parameterization(decoder_output)
-
-        # `action_logits` is not the best name here, better would be "action distribution parameters"
-        result["action_logits"] = action_distribution_params
-
-        self._maybe_sample_actions(sample_actions, result)
-        return result
 
     def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
         x = self.forward_head(normalized_obs_dict)
@@ -408,6 +407,8 @@ class QuadMultiActorCriticRNN(ActorCriticSharedWeights):
                  action_space,
                  cfg):
         super().__init__(model_factory, obs_space, action_space, cfg)
+
+        self.action_parameterization = QuadActionParametrization(cfg, self.decoder.get_out_size(), action_space)
 
     def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
         x = self.forward_head(normalized_obs_dict)

@@ -16,7 +16,7 @@ setup(
 
     version='1.0.0',  # Required
 
-    description='Quadrotor Gym Envs',  # Optional
+    description='Reinforcement Learning for quadrotor swarms',  # Optional
 
     long_description=long_description,  # Optional
 
@@ -26,15 +26,15 @@ setup(
     #
     # This field corresponds to the "Home-Page" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#home-page-optional
-    url='https://github.com/Zhehui-Huang',  # Optional
+    url='https://github.com/TheCodeinator/quad_swarm_rl',  # Optional
 
     # This should be your name or the name of the organization which owns the
     # project.
-    author='Zhehui Huang',  # Optional
+    # author='',  # Optional
 
     # This should be a valid email address corresponding to the author listed
     # above.
-    author_email='zhehuihu@usc.edu',  # Optional
+    # author_email='',  # Optional
 
     # This field adds keywords for your project which will appear on the
     # project page. What does your project relate to?
@@ -69,6 +69,6 @@ setup(
     install_requires=[
         'pytest', 'numpy>1.15', 'pyglet<=1.5.23', 'matplotlib>3', 'gym>=0.17', 'transforms3d', 'noise', 'tqdm',
         'bezier<=2020.5.19', 'numba', 'scipy', 'sample-factory', 'plotly<=5.13.0', 'attrdict==2.0.1',
-        'pandas==2.0.1', 'gymnasium==0.28.1', 'seaborn', 'torch', 'onnx', 'onnxsim'
+        'pandas==2.0.1', 'gymnasium==0.28.1', 'seaborn', 'torch', 'onnx', 'onnxsim', 'netron'
     ],
 )

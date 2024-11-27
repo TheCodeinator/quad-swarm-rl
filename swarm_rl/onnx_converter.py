@@ -6,13 +6,10 @@ Export trained model in ONNX (Open Neural Network eXchange) format
 
 import types
 import json
-
 import onnx
 import torch
 import torch.nn as nn
-import gymnasium as gym
 import onnxsim
-import torchlens as tl
 
 from typing import List
 from pathlib import Path
@@ -70,32 +67,6 @@ class Wrapper(nn.Module):
         return actions
 
 
-def sample_space(space: gym.spaces.Space):
-    if isinstance(space, gym.spaces.Discrete):
-        return int(space.sample())
-    elif isinstance(space, gym.spaces.Box):
-        return torch.from_numpy(space.sample())
-    elif isinstance(space, gym.spaces.Dict):
-        return {k: sample_space(v) for k, v in space.spaces.items()}
-    elif isinstance(space, gym.spaces.Tuple):
-        return tuple(sample_space(s) for s in space.spaces)
-    else:
-        raise NotImplementedError(f"Unsupported space type: {type(space)}")
-
-
-def unsqueeze_args(args):
-    if isinstance(args, int):
-        return torch.tensor(args).unsqueeze(0)
-    if isinstance(args, torch.Tensor):
-        return args.unsqueeze(0)
-    if isinstance(args, dict):
-        return {k: unsqueeze_args(v) for k, v in args.items()}
-    elif isinstance(args, tuple):
-        return (unsqueeze_args(v) for v in args)
-    else:
-        raise NotImplementedError(f"Unsupported args type: {type(args)}")
-
-
 def create_forward(original_forward, arg_names: List[str]):
     args_str = ", ".join(arg_names)
     func_code = f"""
@@ -131,7 +102,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 
 def main():
-    name = "neuralfly_rnn"
+    name = "neuralfly_no_rnn"
 
     model_dir = Path(f"../train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'
@@ -171,24 +142,24 @@ def main():
 
     patch_forward(model, input_names)
 
-    """
-    tl.log_forward_pass(wrapped_model, (m_arguments,),
-                        layers_to_save='all',
-                        vis_opt='unrolled')
-    """
-
+    Path("../artifacts").mkdir(exist_ok=True)
     fn = f"../artifacts/{name}.onnx"
 
     torch.onnx.export(model, (m_arguments,), fn,
                       input_names=input_names,
                       output_names=output_names,
                       # dynamic_axes=dynamic_axes,
+                      do_constant_folding=False,
+                      opset_version=14,
                       keep_initializers_as_inputs=False
                       )
 
     m_in = onnx.load(fn)
 
-    m_out, check = onnxsim.simplify(m_in, 10)
+    m_out, check = onnxsim.simplify(m_in,
+                                    5,
+                                    skip_shape_inference=True,
+                                    overwrite_input_shapes={"obs": [1, 48]})
 
     if check:
         onnx.save(m_out, fn)

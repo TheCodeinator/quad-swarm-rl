@@ -27,7 +27,7 @@ from swarm_rl.train import register_swarm_components
 
 
 class RnnWrapper(nn.Module):
-    actor_critic: ActorCritic
+    policy: ActorCritic
     cfg: Config
     env_info: EnvInfo
 
@@ -35,13 +35,13 @@ class RnnWrapper(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.env_info = env_info
-        self.actor_critic = actor_critic
+        self.policy = actor_critic
 
     def forward(self, **obs):
         rnn = obs.pop("rnn_states")
-        normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
-        rnn = self.actor_critic(normalized_obs, rnn, sample_actions=False)["new_rnn_states"]
-        action_distribution = self.actor_critic.action_distribution()
+        normalized_obs = prepare_and_normalize_obs(self.policy, obs)
+        rnn = self.policy(normalized_obs, rnn, sample_actions=False)["new_rnn_states"]
+        action_distribution = self.policy.action_distribution()
         actions = argmax_actions(action_distribution)
         return actions, rnn
 
@@ -50,7 +50,7 @@ class Wrapper(nn.Module):
     """
     Pass forward expected dummy rnn states for non rnn actor critics
     """
-    actor_critic: ActorCritic
+    policy: ActorCritic
     cfg: Config
     env_info: EnvInfo
 
@@ -58,12 +58,12 @@ class Wrapper(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.env_info = env_info
-        self.actor_critic = actor_critic
+        self.policy = actor_critic
 
     def forward(self, **obs):
-        normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
-        _ = self.actor_critic(normalized_obs, sample_actions=False)
-        action_distribution = self.actor_critic.action_distribution()
+        normalized_obs = prepare_and_normalize_obs(self.policy, obs)
+        _ = self.policy(normalized_obs, sample_actions=False)
+        action_distribution = self.policy.action_distribution()
         actions = argmax_actions(action_distribution)
         return actions
 
@@ -105,7 +105,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 def main():
 
     # I could add a command parser here
-    name = "neuralfly_full_rnn_sqz2"
+    name = "neuralfly_no_rnn_sqz4"
     visualize = True
 
     model_dir = Path(f"../train_dir/{name}/")

@@ -1,5 +1,5 @@
 python -m swarm_rl.train \
---env=quadrotor_multi --train_for_env_steps=50000000 --algo=APPO --use_rnn=True \
+--env=quadrotor_multi --train_for_env_steps=50000000 --algo=APPO --use_rnn=False \
 --num_workers=4 --num_envs_per_worker=8 --device=cpu --learning_rate=0.0003 --ppo_clip_value=5.0 --recurrence=-1 \
 --nonlinearity=relu --actor_critic_share_weights=True --policy_initialization=xavier_uniform \
 --adaptive_stddev=False --with_vtrace=False --max_policy_lag=100000000 --rnn_size=256 --kl_loss_coeff=0.1 \
@@ -17,6 +17,6 @@ python -m swarm_rl.train \
 --quads_use_obstacles=False --quads_obst_density=0.0 \
 --quads_use_downwash=True \
 --quads_view_mode=global --quads_render=False \
---experiment=neuralfly_full_rnn_sqz2 \
+--experiment=neuralfly_no_rnn_sqz4 \
 --with_wandb=True --wandb_user=codeinator-personal \
 --wandb_project=neuralfly \

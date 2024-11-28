@@ -17,6 +17,6 @@ python -m swarm_rl.train \
 --quads_use_obstacles=False --quads_obst_density=0.0 \
 --quads_use_downwash=True \
 --quads_view_mode=global --quads_render=False \
---experiment=neuralfly_no_rnn_sqz4 \
+--experiment=neuralfly_no_rnn_sqz9 \
 --with_wandb=True --wandb_user=codeinator-personal \
 --wandb_project=neuralfly \

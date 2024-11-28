@@ -6,7 +6,7 @@ def quadrotors_override_defaults(env, parser):
         encoder_type='mlp',
         encoder_subtype='mlp_quads',
         rnn_size=256,
-        decoder_mlp_layers=[256],  # add additional decoder layers
+        decoder_mlp_layers=[512],  # add additional decoder layers
         encoder_extra_fc_layers=0,  # modified from zero
         env_frameskip=1,
     )

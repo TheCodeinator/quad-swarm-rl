@@ -105,7 +105,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 def main():
 
     # I could add a command parser here
-    name = "neuralfly_no_rnn_sqz4"
+    name = "neuralfly_no_rnn_sqz9"
     visualize = True
 
     model_dir = Path(f"../train_dir/{name}/")
@@ -153,9 +153,9 @@ def main():
                       input_names=input_names,
                       output_names=output_names,
                       # dynamic_axes=dynamic_axes,
-                      do_constant_folding=False,
-                      opset_version=14,
-                      keep_initializers_as_inputs=False
+                      do_constant_folding=True,
+                      opset_version=13,
+                      keep_initializers_as_inputs=False,
                       )
 
     m_in = onnx.load(fn)
@@ -163,7 +163,7 @@ def main():
     m_out, check = onnxsim.simplify(m_in,
                                     5,
                                     skip_shape_inference=False,
-                                    overwrite_input_shapes={"obs": [1, 48]})
+                                    )
 
     if check:
         onnx.save(m_out, fn)

@@ -233,7 +233,6 @@ class QuadMultiEncoder(Encoder):
         self.all_neighbor_obs_size = neighbor_obs_dim * num_use_neighbor_obs
 
         # # Neighbor Encoder
-        neighbor_encoder_out_size = 0
         self.neighbor_encoder = None
 
         if num_use_neighbor_obs > 0:
@@ -256,8 +255,7 @@ class QuadMultiEncoder(Encoder):
             else:
                 raise NotImplementedError
 
-        if self.neighbor_encoder:
-            neighbor_encoder_out_size = neighbor_hidden_size
+        neighbor_encoder_out_size = neighbor_hidden_size
 
         fc_encoder_layer = cfg.rnn_size
         # Encode Self Obs
@@ -290,8 +288,7 @@ class QuadMultiEncoder(Encoder):
             fc_layer(total_encoder_out_size, 2 * cfg.rnn_size),
             nonlinearity(cfg),
         )
-
-        self.encoder_out_size = 2 * cfg.rnn_size
+        self.encoder_out_size = calc_num_elements(self.feed_forward, (total_encoder_out_size,))
 
     def forward(self, obs_dict):
         obs = obs_dict['obs']
@@ -309,11 +306,9 @@ class QuadMultiEncoder(Encoder):
             obstacle_embeds = self.obstacle_encoder(obs_obstacles).squeeze(0).clone()
             embeddings = torch.cat((embeddings, obstacle_embeds), dim=squeeze_dim)
 
-        if squeeze_dim == 0:
-            embeddings = embeddings.unsqueeze(0).clone()
+        embeddings = embeddings.reshape(batch_size, self.encoder_out_size)
 
-        out = self.feed_forward(embeddings)
-        return out
+        return self.feed_forward(embeddings)
 
     def get_out_size(self) -> int:
         return self.encoder_out_size
@@ -324,16 +319,11 @@ class QuadMultiCore(ModelCore):
     def __init__(self, cfg, input_size):
         super().__init__(cfg)
         self.cfg = cfg
-        self.core_output_size = self.cfg.rnn_size
+        self.core_output_size = input_size
 
-        self.feed_forward = nn.Sequential(
-            fc_layer(input_size, self.core_output_size),
-            nonlinearity(cfg),
-        )
-
-    def forward(self, head_outputs, rnn_states):
-        x = self.feed_forward(head_outputs)
-        return x, rnn_states
+    @staticmethod
+    def forward(head_outputs, rnn_states):
+        return head_outputs, rnn_states
 
 
 class QuadMultiDecoder(Decoder):
@@ -343,7 +333,6 @@ class QuadMultiDecoder(Decoder):
         decoder_layers: List[int] = cfg.decoder_mlp_layers
         activation = nonlinearity(cfg)
         self.mlp = create_mlp(decoder_layers, decoder_input_size, activation)
-
         self.decoder_out_size = calc_num_elements(self.mlp, (decoder_input_size,))
 
     def forward(self, core_output):
@@ -358,7 +347,7 @@ class QuadActionParametrization(ActionsParameterization):
     def __init__(self, cfg, core_out_size, action_space):
         super().__init__(cfg, action_space)
 
-        num_action_outputs = np.prod(action_space.shape)*2
+        num_action_outputs = np.prod(action_space.shape) * 2
         self.distribution_linear = nn.Linear(core_out_size, num_action_outputs)
 
     def forward(self, actor_core_output):
@@ -376,10 +365,8 @@ class QuadMultiActorCritic(ActorCriticSharedWeights):
                  action_space,
                  cfg):
         super().__init__(model_factory, obs_space, action_space, cfg)
-        # in case of shared weights we're using only a single encoder and a single core
-        self.action_parameterization = QuadActionParametrization(cfg, self.decoder.get_out_size(), action_space)
 
-        self.apply(self.initialize_weights)
+        self.action_parameterization = QuadActionParametrization(cfg, self.decoder.get_out_size(), action_space)
 
     def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
         x = self.forward_head(normalized_obs_dict)

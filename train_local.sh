@@ -7,8 +7,9 @@ python -m swarm_rl.train \
 --with_pbt=False --normalize_input=False --normalize_returns=False --reward_clip=10 \
 --quads_use_numba=True --save_milestones_sec=3600 --anneal_collision_steps=300000000 \
 --replay_buffer_sample_prob=0.75 \
+--decoder_mlp_layers=512 \
 --quads_num_agents=6 \
---quads_mode=mix --quads_episode_duration=20.0 \
+--quads_mode=mix --quads_episode_duration=18.0 \
 --quads_obs_repr=xyz_vxyz_R_omega \
 --quads_neighbor_hidden_size=256 --quads_neighbor_obs_type=pos_vel --quads_collision_hitbox_radius=2.0 \
 --quads_collision_falloff_radius=3.0 --quads_collision_reward=5.0 --quads_collision_smooth_max_penalty=10.0 \
@@ -17,6 +18,6 @@ python -m swarm_rl.train \
 --quads_use_obstacles=False --quads_obst_density=0.0 \
 --quads_use_downwash=True \
 --quads_view_mode=global --quads_render=False \
---experiment=neuralfly_no_rnn_sqz9 \
+--experiment=neuralfly_rsp \
 --with_wandb=True --wandb_user=codeinator-personal \
 --wandb_project=neuralfly \

@@ -105,7 +105,7 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 def main():
 
     # I could add a command parser here
-    name = "neuralfly_no_rnn_sqz9"
+    name = "neuralfly_rnn_rsp"
     visualize = True
 
     model_dir = Path(f"../train_dir/{name}/")

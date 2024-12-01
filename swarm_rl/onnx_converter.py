@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 import onnxsim
 import netron
+import argparse
+import argcomplete
 
 from typing import List
 from pathlib import Path
@@ -68,6 +70,18 @@ class Wrapper(nn.Module):
         return actions
 
 
+def parser():
+
+    p = argparse.ArgumentParser()
+
+    p.add_argument('--name', required=True,
+                   help="Experiment name")
+    p.add_argument("--visualize", action="store_true",
+                   help="Startup a netron server for visualization")
+
+    return p
+
+
 def create_forward(original_forward, arg_names: List[str]):
     args_str = ", ".join(arg_names)
     func_code = f"""
@@ -104,9 +118,12 @@ def load_state_dict(cfg: Config, actor_critic: ActorCritic, device: torch.device
 
 def main():
 
-    # I could add a command parser here
-    name = "neuralfly_rnn_rsp"
-    visualize = True
+    p = parser()
+    argcomplete.autocomplete(p)
+    args = p.parse_args()
+
+    name = args.name
+    visualize = args.visualize
 
     model_dir = Path(f"../train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'

@@ -1,1 +1,1 @@
-python -m swarm_rl.onnx_converter --name=neuralfly_long_train --visualize
+python -m swarm_rl.onnx_converter --name=neuralfly_long_train_smallest_rnn --visualize

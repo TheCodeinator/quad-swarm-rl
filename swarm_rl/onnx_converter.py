@@ -125,7 +125,8 @@ def main():
     name = args.name
     visualize = args.visualize
 
-    model_dir = Path(f"../train_dir/{name}/")
+    # script is executed in project root directory by export.sh
+    model_dir = Path(f"./train_dir/{name}/")
     assert model_dir.exists(), f'Path {str(model_dir)} is not a valid path'
     # Load hyper-parameters
     cfg_path = model_dir.joinpath('config.json')
@@ -163,8 +164,8 @@ def main():
 
     patch_forward(model, input_names)
 
-    Path("../artifacts").mkdir(exist_ok=True)
-    fn = f"../artifacts/{name}.onnx"
+    Path("./artifacts").mkdir(exist_ok=True)
+    fn = f"./artifacts/{name}.onnx"
 
     torch.onnx.export(model, (m_arguments,), fn,
                       input_names=input_names,

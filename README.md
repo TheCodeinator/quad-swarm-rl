@@ -11,13 +11,6 @@ https://github.com/alex-petrenko/sample-factory
 
 **Website:** https://sites.google.com/view/swarm-rl
 
-<p align="middle">
-
-<img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Static_Same_Goal.gif?raw=true" width="45%">
-&emsp;
-<img src="https://github.com/Zhehui-Huang/quad-swarm-rl/blob/master/swarm_rl/gifs/Swarm_vs_Swarm.gif?raw=true" width="45%">
-</p> 
-
 ## Installation
 
 Initialize a Python environment, i.e. with `conda` (Python versions 3.6-3.8 are supported):
@@ -44,19 +37,7 @@ This will run the baseline experiment.
 Change the number of workers appropriately to match the number of logical CPU cores on your machine, but it is advised that
 the total number of simulated environments is close to that in the original command:
 
-We provide a training script `train.sh`, so you can simply start training by command `bash train.sh`.
-
-Or, even better, you can use the runner scripts in `swarm_rl/runs/`. These runner scripts (a Sample Factory feature) are Python files that
-contain experiment parameters, and support features such as evaluation on multiple seeds and gridsearches.
-
-To execute a runner script run the following command:
-
-```
-python -m sample_factory.launcher.run --run=swarm_rl.runs.single_quad.single_quad --max_parallel=4 --pause_between=1 --experiments_per_gpu=1 --num_gpus=4
-```
-
-This command will start training four different seeds in parallel on a 4-GPU server. Adjust the parameters accordingly to match
-your hardware setup.
+We provide a training script `train_local.sh`, so you can simply start training by command `bash train_local.sh`.
 
 To monitor the experiments, go to the experiment folder, and run the following command:
 
@@ -88,15 +69,6 @@ python -m swarm_rl.enjoy --algo=APPO --env=quadrotor_multi --replay_buffer_sampl
 EXPERIMENT_NAME and PATH_TO_TRAIN_DIR can be found in the cfg.json file of your trained model
 
 CAMERA_VIEWS can be any number of views from the following: `[topdown, global, chase, side, corner0, corner1, corner2, corner3, topdownfollow]`
-
-
-## Unit Tests
-
-To run unit tests:
-
-```
-./run_tests.sh
-```
 
 ## Citation
 

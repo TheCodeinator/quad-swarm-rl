@@ -14,10 +14,9 @@ python -m swarm_rl.train \
 --quads_neighbor_hidden_size=64 --quads_neighbor_obs_type=pos_vel --quads_collision_hitbox_radius=1.7 \
 --quads_collision_falloff_radius=3.0 --quads_collision_reward=5.0 --quads_collision_smooth_max_penalty=10.0 \
 --quads_neighbor_encoder_type=mean_embed --quads_neighbor_visible_num=5 \
---quads_sim2real=False \
 --quads_use_obstacles=False --quads_obst_density=0.0 \
 --quads_use_downwash=True \
 --quads_view_mode=global --quads_render=False \
---experiment=neuralfly_long_train_smallest \
+--experiment=train_small_test \
 --with_wandb=True --wandb_user=codeinator-personal \
 --wandb_project=neuralfly \

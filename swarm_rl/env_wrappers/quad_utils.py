@@ -91,7 +91,7 @@ def make_quadrotor_env_multi(cfg, render_mode=None, **kwargs):
 
     env = QuadsRewardShapingWrapper(env, reward_shaping_scheme=reward_shaping, annealing=annealing,
                                     with_pbt=cfg.with_pbt)
-    env = QuadEnvCompatibility(env)
+    env = QuadEnvCompatibility(env, cfg)
 
     if cfg.visualize_v_value:
         actor_critic = create_actor_critic(cfg, env.observation_space, env.action_space)

@@ -1,5 +1,6 @@
 from typing import List
 
+import random
 import torch
 import numpy as np
 from sample_factory.model.core import ModelCore
@@ -385,8 +386,18 @@ class QuadMultiActorCriticRNN(ActorCriticSharedWeights):
         super().__init__(model_factory, obs_space, action_space, cfg)
 
         self.action_parameterization = QuadActionParametrization(cfg, self.decoder.get_out_size(), action_space)
+        if self.cfg.generate_quantization_samples:
+            self.env_run_rand_id = random.getrandbits(64)
+            self.obs_record_current_step = 0
 
     def forward(self, normalized_obs_dict, rnn_states=None, values_only=False, sample_actions=True) -> TensorDict:
+        if self.cfg.generate_quantization_samples:
+            obs = normalized_obs_dict['obs']
+            np.save(f"artifacts/obs_samples-{self.cfg.experiment}-{self.env_run_rand_id}-"
+                    f"{self.obs_record_current_step}", obs)
+            np.save(f"artifacts/rnn_state_samples-{self.cfg.experiment}-{self.env_run_rand_id}-"
+                    f"{self.obs_record_current_step}", rnn_states)
+            self.obs_record_current_step += 1
         x = self.forward_head(normalized_obs_dict)
         x, new_rnn_states = self.forward_core(x, rnn_states)
         result = self.forward_tail(x, values_only, sample_actions)
